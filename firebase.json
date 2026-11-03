@@ -1,9 +1,16 @@
 {
-  "firestore": {
-    "rules": "firestore.rules"
+  "database": {
+    "rules": "database.rules.json"
   },
   "hosting": {
     "public": ".",
-    "ignore": ["firebase.json", "firestore.rules", "README.md", "**/.*", "**/node_modules/**"]
+    "ignore": [
+      "firebase.json",
+      "database.rules.json",
+      "firestore.rules",
+      "README.md",
+      "**/.*",
+      "**/node_modules/**"
+    ]
   }
 }

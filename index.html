@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="firebase-config.js"></script>
 <style>
 :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -492,7 +492,7 @@ async function doSave() {
   setStatus('Saving…');
   try {
     if (db) {
-      await db.doc('reports/' + date).set(data);
+      await db.ref('reports/' + date).set(data);
     } else {
       let m = {};
       try { m = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) {}
@@ -505,7 +505,7 @@ async function doSave() {
     else { clearTimeout(timer); timer = setTimeout(save, 300); }
     updateHist();
   } catch (e) {
-    setStatus(e && (e.code === 'invalid_argument' || e.code === 'permission-denied') ? 'This account is not allowed to change the reports.' : 'Could not save. Check your connection and try again.', true);
+    setStatus(e && (e.code === 'invalid_argument' || /permission/i.test(e.code)) ? 'This account is not allowed to change the reports.' : 'Could not save. Check your connection and try again.', true);
   }
 }
 /* The Hectarage is the same for a whole month: changing it updates every saved day of that month */
@@ -516,7 +516,7 @@ async function propagateHa(date, ha) {
     const nr = clone(r);
     nr.crop.ha = ha == null ? '' : ha;
     nr.updatedAt = new Date().toISOString();
-    if (db) await db.doc('reports/' + k).set(nr);
+    if (db) await db.ref('reports/' + k).set(nr);
     else {
       let m = {};
       try { m = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) {}
@@ -644,10 +644,19 @@ function startCloud(fs) {
   setStatus('Loading saved reports…');
   clearTimeout(loadTimer);
   loadTimer = setTimeout(() => setStatus('Could not reach saved reports yet. Showing the last report on this page.', true), 10000);
-  unsub = db.collection('reports').orderBy('date', 'desc').limit(90).onSnapshot(onList, e => {
+  const ref = db.ref('reports').orderByKey().limitToLast(90);
+  const cb = snap => {
+    const docs = [];
+    snap.forEach(c => { docs.push({ id: c.key, data: () => c.val() }); });
+    docs.reverse();
+    onList({ docs, metadata: { fromCache: false, hasPendingWrites: false } });
+  };
+  const eb = e => {
     clearTimeout(loadTimer);
-    setStatus(e && e.code === 'permission-denied' ? 'This account is not allowed to read the reports. Check the rules in Firebase.' : 'Saved reports could not be loaded.', true);
-  });
+    setStatus(/permission/i.test((e && (e.code || e.message)) || '') ? 'This account is not allowed to read the reports. Check the rules in Firebase.' : 'Saved reports could not be loaded.', true);
+  };
+  ref.on('value', cb, eb);
+  unsub = () => ref.off('value', cb);
 }
 function stopCloud() {
   if (unsub) { unsub(); unsub = null; }
@@ -674,7 +683,7 @@ $('f-import').addEventListener('change', async e => {
     for (const [k, v] of Object.entries(srcs)) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !v || typeof v !== 'object') continue;
       const doc = Object.assign({}, v, { date: k });
-      if (db) await db.doc('reports/' + k).set(doc);
+      if (db) await db.ref('reports/' + k).set(doc);
       else { let m = {}; try { m = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (x) {} m[k] = doc; localStorage.setItem(LS, JSON.stringify(m)); }
       reports.set(k, doc); n++;
     }
@@ -690,7 +699,7 @@ $('f-import').addEventListener('change', async e => {
   if (!window.firebase) { startLocal('Could not load Firebase. Data is saved on this device only.'); return; }
   $('layout').hidden = true; $('hist').hidden = true;
   firebase.initializeApp(cfg);
-  const auth = firebase.auth(), fs = firebase.firestore();
+  const auth = firebase.auth(), fs = firebase.database();
   auth.onAuthStateChanged(u => { if (u) startCloud(fs); else stopCloud(); });
   $('btn-out').addEventListener('click', () => auth.signOut());
   $('login-form').addEventListener('submit', async e => {
