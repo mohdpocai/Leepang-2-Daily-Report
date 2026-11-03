@@ -85,12 +85,31 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size
 .pnl{border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:18px;min-width:0}
 .pnl-h h3{margin:0;font:800 18px var(--font-display);letter-spacing:.03em;text-transform:uppercase}
 .pnl-h p{margin:2px 0 0;color:var(--muted);font-size:13px}
-.pnl.daily{border:2px solid var(--accent)}
+.pnl.daily{border:2px solid var(--accent);margin-top:14px}
+.pnl.fold{margin-top:12px}
 .pnl.auto{background:var(--field);border-style:dashed}
 .pnl.auto .inp{background:var(--panel);border-style:dashed}
 .pnl.auto>.grid{margin-top:14px}
 .pnl.auto>.note{margin:10px 0 0}
 .pnl.setup>.grid{margin-top:14px}
+.dbody{margin-top:4px}
+.gg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 10px}
+.gg.two{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}
+.gc2{border:1px solid var(--line);border-left:5px solid var(--dot,var(--accent));border-radius:10px;padding:10px 12px 12px;margin-top:12px}
+.gc2 h4{margin:0 0 8px;font:700 15px var(--font-body);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.gc2.sum{background:var(--field);border-style:dashed;border-left-style:solid}
+.gc2.sum .ro b{padding:7px 8px;font-size:15px}
+.gc2 .note{margin:8px 0 0}
+.fld.sm>span{font-size:12px;font-weight:600;color:var(--muted);line-height:1.2;min-height:2.4em;display:flex;align-items:flex-end}
+.fld.sm .inp{padding-right:0}.fld.sm .inp input{padding:8px 8px}
+.gc2 .ro>span{font-size:12px;font-weight:600;color:var(--muted);line-height:1.2;min-height:2.4em;display:flex;align-items:flex-end}
+@media (max-width:380px){.gg{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.fold>summary{cursor:pointer;list-style:none;position:relative;padding-right:28px}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::after{content:"";position:absolute;right:6px;top:8px;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .15s}
+.fold[open]>summary::after{transform:rotate(-135deg);top:12px}
+.fold>summary:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:6px}
+.fold[open]>summary{margin-bottom:14px}
 .tag{font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-left:4px;white-space:nowrap}
 .ro{display:grid;gap:4px;min-width:0}
 .ro>span{font-size:13px;font-weight:600}
@@ -387,8 +406,39 @@ function autoTodate(d, initial) {
   const ry = prev.date.slice(0, 4) === d.date.slice(0, 4) ? num(pr.ytd) : 0;
   if (ry !== null) d.rain.ytd = (ry + rt).toFixed(1);
 }
+const SUMMARY_GANGS = ['pm20', 'pm16', 'pm96', 'pm23'];
+function applyAll(d) {
+  /* Summary All Gang = automatic combination of the four gangs */
+  d.gangs = d.gangs || {};
+  const gs = SUMMARY_GANGS.map(k => d.gangs[k] || {});
+  const any = gs.some(g => ROWS.some(r => String(g[r.k] == null ? '' : g[r.k]).trim() !== ''));
+  if (!any) return;
+  const a = d.gangs.all = d.gangs.all || {};
+  const ot = gs.map(g => { const m = String(g.outturn == null ? '' : g.outturn).trim().match(/^(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?$/); return m ? { a: parseFloat(m[1]), b: m[2] === undefined ? null : parseFloat(m[2]) } : null; }).filter(Boolean);
+  if (ot.length) {
+    const A = ot.reduce((t, x) => t + x.a, 0);
+    a.outturn = ot.every(x => x.b !== null) ? A + '/' + ot.reduce((t, x) => t + x.b, 0) : String(A);
+  } else a.outturn = '';
+  /* weight = crop of the gang (yield x outturn); falls back to outturn, then to a plain average */
+  const w = gs.map(g => { const y = num(g.yield), o = ot.length ? (String(g.outturn).match(/^\d+(?:\.\d+)?/) || [null])[0] : null; return y !== null && o !== null ? y * parseFloat(o) : o !== null ? parseFloat(o) : 1; });
+  const wavg = (key, dec) => {
+    let sw = 0, sv = 0;
+    gs.forEach((g, i) => { const v = num(g[key]); if (v !== null) { const x = w[i] > 0 ? w[i] : 1; sw += x; sv += v * x; } });
+    return sw > 0 ? (sv / sw).toFixed(dec) : '';
+  };
+  /* Yield/mdy = total crop / total man-days */
+  let ym = 0, mo = 0;
+  gs.forEach(g => { const y = num(g.yield), m = (String(g.outturn).match(/^\d+(?:\.\d+)?/) || [null])[0]; if (y !== null && m !== null) { ym += y * parseFloat(m); mo += parseFloat(m); } });
+  a.yield = mo > 0 ? (ym / mo).toFixed(2) : wavg('yield', 2);
+  a.unripe = wavg('unripe', 1);
+  a.interval = wavg('interval', 1);
+  a.loose = wavg('loose', 1);
+  const bl = gs.map(g => String(g.backlog == null ? '' : g.backlog).trim()).filter(v => v && !/^nil$/i.test(v));
+  a.backlog = bl.length ? (bl.every(v => num(v) !== null) ? String(bl.reduce((t, v) => t + num(v), 0)) : bl.join(', ')) : (gs.some(g => /^nil$/i.test(String(g.backlog).trim())) ? 'Nil' : '');
+}
 function render() {
   applyYieldBudget(state);
+  applyAll(state);
   ensureFyBase(state);
   const d = state, c = d.crop || {}, r = d.rain || {}, g = d.gangs || {};
   $('report').innerHTML =
@@ -405,6 +455,7 @@ function render() {
   put('ro-fy', withUnit(f2(yieldVal(c, YIELDS[2])), ' mt/Ha'));
   put('ro-budget-mth', withUnit(c.bYMth, ' mt/Ha'));
   put('ro-budget-fy', withUnit(c.bYFy, ' mt/Ha'));
+  ROWS.forEach(x => put('ro-all-' + x.k, ((state.gangs && state.gangs.all && state.gangs.all[x.k]) || '') === '' ? '\u2014' : withUnit(state.gangs.all[x.k], x.unit)));
   put('calc', num(c.ha) > 0 ? (num(c.yFyBase) === null ? 'Enter Todate Yield (FY) up to last month once, to see the FY yield.' : '') : 'Enter the Hectarage (in Set when it changes) to calculate the yields.');
   fit();
 }
@@ -431,16 +482,20 @@ function field(path, label, hint, ph, cls) {
   return '<label class="fld' + (cls ? ' ' + cls : '') + '" for="' + id + '"><span>' + label + (cls === 'auto' ? ' <i class="tag">auto</i>' : '') + '</span><div class="inp"><input id="' + id + '" data-path="' + path + '" inputmode="decimal" autocomplete="off" spellcheck="false"' + (ph ? ' placeholder="' + ph + '"' : '') + '><em>' + hint + '</em></div></label>';
 }
 function buildForm() {
-  const panel = (cls, title, sub, body) => '<section class="pnl ' + cls + '"><div class="pnl-h"><h3>' + title + '</h3><p>' + sub + '</p></div>' + body + '</section>';
-  const ro = (id, label) => '<div class="ro"><span>' + label + ' <i class="tag">calculated</i></span><b id="' + id + '">—</b></div>';
+  const fold = (cls, title, sub, body) => '<details class="pnl fold ' + cls + '"><summary class="pnl-h"><h3>' + title + '</h3><p>' + sub + '</p></summary>' + body + '</details>';
+  const ro = (id, label, tag) => '<div class="ro"><span>' + label + (tag === false ? '' : ' <i class="tag">calculated</i>') + '</span><b id="' + id + '">—</b></div>';
+  const lab = r => r.hint && r.k !== 'yield' ? r.label + ' (' + r.hint + ')' : r.label;
+  const sm = (path, label, ph) => field(path, label, '', ph, 'sm');
 
-  let daily = '<div class="grp"><h3>Crop</h3><div class="grid">' + field('crop.tdy', 'Today Crop', 'mt') + '</div></div>';
-  GANGS.forEach(g => {
-    daily += '<div class="grp"><h3 style="--dot:' + g.c + '"><i></i>' + g.name + '</h3><div class="grid">' +
-      ROWS.map(r => field('gangs.' + g.k + '.' + r.k, r.label, r.hint, r.ph)).join('') + '</div></div>';
+  let daily = '<div class="gg two">' + sm('crop.tdy', 'Today Crop (mt)') + sm('rain.tdy', 'Rainfall today (mm)') + '</div>';
+  GANGS.filter(g => g.k !== 'all').forEach(g => {
+    daily += '<div class="gc2" style="--dot:' + g.c + '"><h4>' + g.name + '</h4><div class="gg">' +
+      ROWS.map(r => sm('gangs.' + g.k + '.' + r.k, lab(r), r.ph)).join('') + '</div></div>';
   });
-  daily += '<div class="grp"><h3>Rainfall</h3><div class="grid">' + field('rain.tdy', 'Rainfall today', 'mm') + '</div></div>';
-  daily += '<div class="grp"><h3>Remarks</h3><label class="fld" for="f-remarks"><span class="sr">Remarks</span><textarea id="f-remarks" data-path="remarks" rows="3"></textarea></label></div>';
+  const allG = GANGS.find(g => g.k === 'all');
+  daily += '<div class="gc2 sum" style="--dot:' + allG.c + '"><h4>' + allG.name + ' <i class="tag">automatic</i></h4><div class="gg">' +
+    ROWS.map(r => ro('ro-all-' + r.k, lab(r), false)).join('') + '</div><p class="note">Added up from the four gangs above. Outturn is added, the other figures are averaged by crop.</p></div>';
+  daily += '<label class="fld" for="f-remarks" style="margin-top:14px"><span>Remarks</span><textarea id="f-remarks" data-path="remarks" rows="2"></textarea></label>';
 
   const auto = '<div class="grid">' + field('crop.mth', 'Todate Crop (Mth)', 'mt', '', 'auto') + field('crop.yFyBase', 'Todate Yield (FY) up to last month', 'mt/Ha', '', 'auto') +
     field('rain.mtd', 'Rainfall MTD', 'mm', '', 'auto') + field('rain.ytd', 'Rainfall YTD', 'mm', '', 'auto') +
@@ -449,12 +504,12 @@ function buildForm() {
   const setup = '<div class="grid">' + field('crop.ha', 'Hectarage for the month', 'Ha') + ro('ro-budget-mth', 'Todate Yield Budget (Mth)') + ro('ro-budget-fy', 'Todate Yield Budget (FY)') + '</div><p class="note">The Hectarage applies to the whole month. If you change it, the yield changes for every saved day of that month. Earlier months stay as they are.</p><p class="note">Yield budgets are calculated automatically from the 2026/2027 monthly budget (July 2026 to June 2027).</p>';
 
   $('ed-body').innerHTML =
-    '<div class="grp"><h3>Date</h3><label class="fld" for="f-date"><span class="sr">Report date</span><input type="date" id="f-date"></label></div>' +
-    panel('daily', 'Update daily', 'Type these every day.', daily) +
-    panel('auto', 'Filled in automatically', 'Carried forward from the previous saved day. Only type in the boxes tagged auto, to correct a figure or on your first day. Todate Yield (FY) is the yield up to last month plus this month\u2019s yield, so a new Hectarage never changes earlier months.', auto) +
-    panel('setup', 'Set when it changes', 'Set the Hectarage once at the start of each month.', setup) +
-    panel('data', 'Backup', 'Download every saved report, or import a backup file. Importing replaces saved reports that have the same date.',
-      '<div class="row"><button id="btn-export" class="btn" type="button">Download backup</button><button id="btn-import" class="btn" type="button">Import backup</button><input type="file" id="f-import" accept="application/json,.json" hidden></div>');
+    '<label class="fld" for="f-date" style="margin-top:14px"><span>Report date</span><input type="date" id="f-date"></label>' +
+    '<section class="pnl daily"><div class="pnl-h"><h3>Update daily</h3><p>Only these boxes need typing each day.</p></div><div class="dbody">' + daily + '</div></section>' +
+    fold('auto', 'Filled in automatically', 'Open to check or correct the carried-forward figures.', auto) +
+    fold('setup', 'Set when it changes', 'Hectarage, once at the start of each month.', setup) +
+    fold('data', 'Backup', 'Download or import saved reports.',
+      '<div class="row"><button id="btn-export" class="btn" type="button">Download backup</button><button id="btn-import" class="btn" type="button">Import backup</button><input type="file" id="f-import" accept="application/json,.json" hidden></div><p class="note">Importing replaces saved reports that have the same date.</p>');
 }
 function syncForm() {
   $('editor').querySelectorAll('[data-path]').forEach(el => {
