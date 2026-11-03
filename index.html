@@ -127,9 +127,9 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size
 .r-kpis{display:grid;grid-template-columns:repeat(6,1fr);row-gap:8px;background:#bfe8c8;padding:32px 6px 12px;border-radius:0 0 18px 18px}
 .kpi{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;padding:0 4px;border-left:1px solid rgba(20,48,31,.22)}
 .kpi.k2{grid-column:span 3}.kpi.k3{grid-column:span 2}
-.kpi:nth-child(1),.kpi:nth-child(3){border-left:0}
-.kpi:nth-child(n+3){border-top:1px solid rgba(20,48,31,.22);padding-top:8px}
-.kpi.k2 .kv{font-size:22px}
+.kpi:nth-child(1),.kpi:nth-child(4){border-left:0}
+.kpi:nth-child(n+4){border-top:1px solid rgba(20,48,31,.22);padding-top:8px}
+.kpi.c3 .kv{font-size:20px}
 .kpi svg{width:38px;height:38px}
 .kl{font-weight:700;font-size:15px;color:#17375a;margin-top:2px}
 .kv{font:800 19px/1.1 var(--font-body);font-variant-numeric:tabular-nums;color:#14301f;white-space:nowrap}
@@ -147,7 +147,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size
 .gf{position:absolute;right:4px;opacity:.5;z-index:0}
 .gf.t{top:2px}.gf.b{bottom:4px}
 .gc.wide{grid-column:1/-1}
-.gc.wide .gb{display:grid;grid-template-rows:repeat(3,27px);grid-auto-flow:column;grid-template-columns:1fr 1fr;column-gap:16px}
+.gc.wide .gb{display:grid;grid-template-rows:repeat(4,27px);grid-auto-flow:column;grid-template-columns:1fr 1fr;column-gap:16px}
 .r-rain{display:flex;align-items:center;gap:12px;margin:12px 16px 0;padding:8px 14px;background:#1a63c9;color:#fff;border-radius:10px}
 .rt{font:800 20px var(--font-display);margin-right:auto}
 .rc{display:flex;flex-direction:column;align-items:center;line-height:1.15;min-width:62px}
@@ -213,20 +213,21 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size
 /* ---------- data ---------- */
 const DEFAULT = {
   date: '2026-11-02',
-  crop: { ha: '', tdy: '', mth: '', yFyBase: '', bYMth: '', bYFy: '' },
+  crop: { ha: '', tdy: '', est: '', mth: '', yFyBase: '', bYMth: '', bYFy: '' },
   gangs: {
-    pm20:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '' },
-    pm16:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '' },
-    pm96:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '' },
-    pm23:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '' },
-    all:   { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '' }
+    pm20:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '', looseTd: '' },
+    pm16:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '', looseTd: '' },
+    pm96:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '', looseTd: '' },
+    pm23:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '', looseTd: '' },
+    all:   { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '', looseTd: '' }
   },
   rain: { tdy: '', mtd: '', ytd: '' },
   remarks: ''
 };
 const CROPS = [
-  { k: 'tdy', label: 'Today Crop',        icon: 'scale' },
-  { k: 'mth', label: 'Todate Crop (Mth)', icon: 'bars' }
+  { k: 'tdy', label: 'Today Crop',          icon: 'scale' },
+  { k: 'est', label: 'Estimate Crop Today', icon: 'bars' },
+  { k: 'mth', label: 'Todate Crop (Mth)',   icon: 'bars' }
 ];
 /* Actual yields are calculated from crop and hectarage; budget yields use the 2026/2027 monthly budget. */
 const YIELDS = [
@@ -247,7 +248,8 @@ const ROWS = [
   { k: 'unripe',   label: 'Unripe',      unit: '%',        hint: '%',       icon: 'warn' },
   { k: 'interval', label: 'Interval',    unit: ' days',    hint: 'days',    icon: 'cal' },
   { k: 'backlog',  label: 'Backlog',     unit: '',         hint: '',        icon: 'box',   ph: 'Nil' },
-  { k: 'loose',    label: 'Loose fruit', unit: '%',        hint: '%',       icon: 'nut' }
+  { k: 'loose',    label: 'Loose Tdy',   elabel: 'Loose fruit Today (%)',   unit: '%', hint: '%', icon: 'nut' },
+  { k: 'looseTd',  label: 'Loose Tdt',   elabel: 'Loose fruit Todate (%)',  unit: '%', hint: '%', icon: 'nut' }
 ];
 const RAIN = [
   { k: 'tdy', label: 'Tdy' }, { k: 'mtd', label: 'MTD' }, { k: 'ytd', label: 'YTD' }
@@ -332,7 +334,7 @@ const yieldVal = (c, y) => {
 };
 const kpiCell = (icon, label, value, extra, cls) => '<div class="kpi ' + cls + '">' + ICON[icon] + '<span class="kl">' + label + '</span><b class="kv">' + esc(value) + '</b>' + (extra || '') + '</div>';
 function kpiHtml(c) {
-  const crops = CROPS.map(k => kpiCell(k.icon, k.label, withUnit(c[k.k], ' mt'), '', 'k2')).join('');
+  const crops = CROPS.map(k => kpiCell(k.icon, k.label, withUnit(c[k.k], ' mt'), '', 'k3 c3')).join('');
   const yields = YIELDS.map(y => {
     const a = yieldVal(c, y);
     return kpiCell('trend', y.label, withUnit(f2(a), ' mt/Ha'), y.budget ? budgetLine(c[y.budget]) + diffChip(a, num(c[y.budget])) : '', 'k3');
@@ -433,6 +435,7 @@ function applyAll(d) {
   a.unripe = wavg('unripe', 1);
   a.interval = wavg('interval', 1);
   a.loose = wavg('loose', 1);
+  a.looseTd = wavg('looseTd', 1);
   const bl = gs.map(g => String(g.backlog == null ? '' : g.backlog).trim()).filter(v => v && !/^nil$/i.test(v));
   a.backlog = bl.length ? (bl.every(v => num(v) !== null) ? String(bl.reduce((t, v) => t + num(v), 0)) : bl.join(', ')) : (gs.some(g => /^nil$/i.test(String(g.backlog).trim())) ? 'Nil' : '');
 }
@@ -484,10 +487,10 @@ function field(path, label, hint, ph, cls) {
 function buildForm() {
   const fold = (cls, title, sub, body) => '<details class="pnl fold ' + cls + '"><summary class="pnl-h"><h3>' + title + '</h3><p>' + sub + '</p></summary>' + body + '</details>';
   const ro = (id, label, tag) => '<div class="ro"><span>' + label + (tag === false ? '' : ' <i class="tag">calculated</i>') + '</span><b id="' + id + '">—</b></div>';
-  const lab = r => r.hint && r.k !== 'yield' ? r.label + ' (' + r.hint + ')' : r.label;
+  const lab = r => r.elabel || (r.hint && r.k !== 'yield' ? r.label + ' (' + r.hint + ')' : r.label);
   const sm = (path, label, ph) => field(path, label, '', ph, 'sm');
 
-  let daily = '<div class="gg two">' + sm('crop.tdy', 'Today Crop (mt)') + sm('rain.tdy', 'Rainfall today (mm)') + '</div>';
+  let daily = '<div class="gg" style="margin-top:12px">' + sm('crop.tdy', 'Today Crop (mt)') + sm('crop.est', 'Estimate Crop Today (mt)') + sm('rain.tdy', 'Rainfall today (mm)') + '</div>';
   GANGS.filter(g => g.k !== 'all').forEach(g => {
     daily += '<div class="gc2" style="--dot:' + g.c + '"><h4>' + g.name + '</h4><div class="gg">' +
       ROWS.map(r => sm('gangs.' + g.k + '.' + r.k, lab(r), r.ph)).join('') + '</div></div>';
