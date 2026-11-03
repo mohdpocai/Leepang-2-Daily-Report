@@ -127,9 +127,9 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size
 .r-kpis{display:grid;grid-template-columns:repeat(6,1fr);row-gap:8px;background:#bfe8c8;padding:32px 6px 12px;border-radius:0 0 18px 18px}
 .kpi{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;padding:0 4px;border-left:1px solid rgba(20,48,31,.22)}
 .kpi.k2{grid-column:span 3}.kpi.k3{grid-column:span 2}
-.kpi:nth-child(1),.kpi:nth-child(4){border-left:0}
-.kpi:nth-child(n+4){border-top:1px solid rgba(20,48,31,.22);padding-top:8px}
-.kpi.c3 .kv{font-size:20px}
+.kpi:nth-child(1),.kpi:nth-child(3){border-left:0}
+.kpi:nth-child(n+3){border-top:1px solid rgba(20,48,31,.22);padding-top:8px}
+.kpi.k2 .kv{font-size:22px}
 .kpi svg{width:38px;height:38px}
 .kl{font-weight:700;font-size:15px;color:#17375a;margin-top:2px}
 .kv{font:800 19px/1.1 var(--font-body);font-variant-numeric:tabular-nums;color:#14301f;white-space:nowrap}
@@ -153,6 +153,9 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size
 .rc{display:flex;flex-direction:column;align-items:center;line-height:1.15;min-width:62px}
 .rc small{font-size:12px;font-weight:600;opacity:.9}
 .rc b{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.r-est{display:flex;align-items:center;gap:10px;margin:8px 16px 0;padding:8px 14px;background:#bfe8c8;border-radius:10px}
+.r-est svg{width:28px;height:28px;flex:none}
+.r-est .ev{margin-left:auto;font:800 20px var(--font-display);font-variant-numeric:tabular-nums}
 .r-rem{display:flex;align-items:center;gap:10px;margin:8px 16px 0;padding:10px 14px;background:#f6c93a;border-radius:10px}
 .rl{font-weight:800;font-size:16px}
 .r-rem i{width:1px;align-self:stretch;background:rgba(20,48,31,.4)}
@@ -226,7 +229,6 @@ const DEFAULT = {
 };
 const CROPS = [
   { k: 'tdy', label: 'Today Crop',          icon: 'scale' },
-  { k: 'est', label: 'Estimate Crop Today', icon: 'bars' },
   { k: 'mth', label: 'Todate Crop (Mth)',   icon: 'bars' }
 ];
 /* Actual yields are calculated from crop and hectarage; budget yields use the 2026/2027 monthly budget. */
@@ -248,8 +250,8 @@ const ROWS = [
   { k: 'unripe',   label: 'Unripe',      unit: '%',        hint: '%',       icon: 'warn' },
   { k: 'interval', label: 'Interval',    unit: ' days',    hint: 'days',    icon: 'cal' },
   { k: 'backlog',  label: 'Backlog',     unit: '',         hint: '',        icon: 'box',   ph: 'Nil' },
-  { k: 'loose',    label: 'Loose Tdy',   elabel: 'Loose fruit Today (%)',   unit: '%', hint: '%', icon: 'nut' },
-  { k: 'looseTd',  label: 'Loose Tdt',   elabel: 'Loose fruit Todate (%)',  unit: '%', hint: '%', icon: 'nut' }
+  { k: 'loose',    label: 'LF Today',    elabel: 'LF Today (%)',   unit: '%', hint: '%', icon: 'nut' },
+  { k: 'looseTd',  label: 'LF Todate',   elabel: 'LF Todate (%)',  unit: '%', hint: '%', icon: 'nut' }
 ];
 const RAIN = [
   { k: 'tdy', label: 'Tdy' }, { k: 'mtd', label: 'MTD' }, { k: 'ytd', label: 'YTD' }
@@ -334,7 +336,7 @@ const yieldVal = (c, y) => {
 };
 const kpiCell = (icon, label, value, extra, cls) => '<div class="kpi ' + cls + '">' + ICON[icon] + '<span class="kl">' + label + '</span><b class="kv">' + esc(value) + '</b>' + (extra || '') + '</div>';
 function kpiHtml(c) {
-  const crops = CROPS.map(k => kpiCell(k.icon, k.label, withUnit(c[k.k], ' mt'), '', 'k3 c3')).join('');
+  const crops = CROPS.map(k => kpiCell(k.icon, k.label, withUnit(c[k.k], ' mt'), '', 'k2')).join('');
   const yields = YIELDS.map(y => {
     const a = yieldVal(c, y);
     return kpiCell('trend', y.label, withUnit(f2(a), ' mt/Ha'), y.budget ? budgetLine(c[y.budget]) + diffChip(a, num(c[y.budget])) : '', 'k3');
@@ -408,6 +410,23 @@ function autoTodate(d, initial) {
   const ry = prev.date.slice(0, 4) === d.date.slice(0, 4) ? num(pr.ytd) : 0;
   if (ry !== null) d.rain.ytd = (ry + rt).toFixed(1);
 }
+function applyLF(d) {
+  /* LF Todate (month): running average of LF Today, weighted by each day's crop (yield x outturn) */
+  if (!d || !d.date) return;
+  d.gangs = d.gangs || {};
+  const prev = prevReport(d.date), same = prev && prev.date && prev.date.slice(0, 7) === d.date.slice(0, 7);
+  SUMMARY_GANGS.forEach(k => {
+    const g = d.gangs[k] = d.gangs[k] || {}, pg = same ? ((prev.gangs || {})[k] || {}) : {};
+    const pt = num(pg.looseTd), pw = num(pg.lfW) > 0 ? num(pg.lfW) : (pt !== null ? 1 : 0);
+    const lf = num(g.loose), o = (String(g.outturn == null ? '' : g.outturn).match(/^\d+(?:\.\d+)?/) || [null])[0], y = num(g.yield);
+    let w = o !== null ? (y !== null ? y * parseFloat(o) : parseFloat(o)) : 1;
+    if (!(w > 0)) w = 1;
+    if (lf === null) { g.looseTd = pt !== null ? String(pg.looseTd) : ''; g.lfW = pt !== null ? String(pw) : ''; return; }
+    const W = (pt !== null ? pw : 0) + w;
+    g.looseTd = (((pt !== null ? pt * pw : 0) + lf * w) / W).toFixed(1);
+    g.lfW = W.toFixed(3);
+  });
+}
 const SUMMARY_GANGS = ['pm20', 'pm16', 'pm96', 'pm23'];
 function applyAll(d) {
   /* Summary All Gang = automatic combination of the four gangs */
@@ -435,12 +454,15 @@ function applyAll(d) {
   a.unripe = wavg('unripe', 1);
   a.interval = wavg('interval', 1);
   a.loose = wavg('loose', 1);
-  a.looseTd = wavg('looseTd', 1);
+  let tw = 0, tv = 0;
+  gs.forEach(g => { const v = num(g.looseTd), x = num(g.lfW) > 0 ? num(g.lfW) : 1; if (v !== null) { tw += x; tv += v * x; } });
+  a.looseTd = tw > 0 ? (tv / tw).toFixed(1) : '';
   const bl = gs.map(g => String(g.backlog == null ? '' : g.backlog).trim()).filter(v => v && !/^nil$/i.test(v));
   a.backlog = bl.length ? (bl.every(v => num(v) !== null) ? String(bl.reduce((t, v) => t + num(v), 0)) : bl.join(', ')) : (gs.some(g => /^nil$/i.test(String(g.backlog).trim())) ? 'Nil' : '');
 }
 function render() {
   applyYieldBudget(state);
+  applyLF(state);
   applyAll(state);
   ensureFyBase(state);
   const d = state, c = d.crop || {}, r = d.rain || {}, g = d.gangs || {};
@@ -450,6 +472,7 @@ function render() {
     '<section class="r-kpis">' + kpiHtml(c) + '</section>' +
     '<section class="r-gangs">' + GANGS.map(x => gangCard(x, g[x.k] || {})).join('') + '</section>' +
     '<section class="r-rain">' + ICON.cloud + '<span class="rt">Rainfall</span>' + RAIN.map(x => '<div class="rc"><small>' + x.label + '</small><b>' + esc(withUnit(r[x.k], ' mm')) + '</b></div>').join('') + '</section>' +
+    '<section class="r-est">' + ICON.bars + '<span class="rl">Estimate Crop Today</span><span class="ev">' + esc(withUnit(c.est, ' mt')) + '</span></section>' +
     '<section class="r-rem">' + ICON.doc + '<span class="rl">Remarks</span><i></i><span class="rv">' + esc((d.remarks || '').trim() || '—') + '</span></section>' +
     '<footer class="r-foot"><span>Together for a Higher Productivity</span></footer>';
   const put = (id, v) => { const el = $(id); if (el) el.textContent = v; };
@@ -459,6 +482,7 @@ function render() {
   put('ro-budget-mth', withUnit(c.bYMth, ' mt/Ha'));
   put('ro-budget-fy', withUnit(c.bYFy, ' mt/Ha'));
   ROWS.forEach(x => put('ro-all-' + x.k, ((state.gangs && state.gangs.all && state.gangs.all[x.k]) || '') === '' ? '\u2014' : withUnit(state.gangs.all[x.k], x.unit)));
+  SUMMARY_GANGS.forEach(k => put('ro-g-' + k + '-looseTd', withUnit((state.gangs[k] || {}).looseTd, '%') || '\u2014'));
   put('calc', num(c.ha) > 0 ? (num(c.yFyBase) === null ? 'Enter Todate Yield (FY) up to last month once, to see the FY yield.' : '') : 'Enter the Hectarage (in Set when it changes) to calculate the yields.');
   fit();
 }
@@ -490,14 +514,15 @@ function buildForm() {
   const lab = r => r.elabel || (r.hint && r.k !== 'yield' ? r.label + ' (' + r.hint + ')' : r.label);
   const sm = (path, label, ph) => field(path, label, '', ph, 'sm');
 
-  let daily = '<div class="gg" style="margin-top:12px">' + sm('crop.tdy', 'Today Crop (mt)') + sm('crop.est', 'Estimate Crop Today (mt)') + sm('rain.tdy', 'Rainfall today (mm)') + '</div>';
+  let daily = '<div class="gg two">' + sm('crop.tdy', 'Today Crop (mt)') + sm('rain.tdy', 'Rainfall today (mm)') + '</div>';
   GANGS.filter(g => g.k !== 'all').forEach(g => {
     daily += '<div class="gc2" style="--dot:' + g.c + '"><h4>' + g.name + '</h4><div class="gg">' +
-      ROWS.map(r => sm('gangs.' + g.k + '.' + r.k, lab(r), r.ph)).join('') + '</div></div>';
+      ROWS.map(r => r.k === 'looseTd' ? ro('ro-g-' + g.k + '-looseTd', r.elabel, false) : sm('gangs.' + g.k + '.' + r.k, lab(r), r.ph)).join('') + '</div></div>';
   });
   const allG = GANGS.find(g => g.k === 'all');
   daily += '<div class="gc2 sum" style="--dot:' + allG.c + '"><h4>' + allG.name + ' <i class="tag">automatic</i></h4><div class="gg">' +
-    ROWS.map(r => ro('ro-all-' + r.k, lab(r), false)).join('') + '</div><p class="note">Added up from the four gangs above. Outturn is added, the other figures are averaged by crop.</p></div>';
+    ROWS.map(r => ro('ro-all-' + r.k, lab(r), false)).join('') + '</div><p class="note">Added up from the four gangs above. Outturn is added, the other figures are averaged by crop. LF Todate for each gang is worked out automatically from the days before.</p></div>';
+  daily += '<div class="gg two">' + sm('crop.est', 'Estimate Crop Today (mt)') + '</div>';
   daily += '<label class="fld" for="f-remarks" style="margin-top:14px"><span>Remarks</span><textarea id="f-remarks" data-path="remarks" rows="2"></textarea></label>';
 
   const auto = '<div class="grid">' + field('crop.mth', 'Todate Crop (Mth)', 'mt', '', 'auto') + field('crop.yFyBase', 'Todate Yield (FY) up to last month', 'mt/Ha', '', 'auto') +
