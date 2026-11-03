@@ -694,6 +694,13 @@ $('f-import').addEventListener('change', async e => {
 
 (function boot() {
   const cfg = window.FIREBASE_CONFIG || {};
+  if (cfg.openAccess && cfg.databaseURL && !/PASTE/.test(cfg.databaseURL)) {
+    if (!window.firebase) { startLocal('Could not load Firebase. Data is saved on this device only.'); return; }
+    firebase.initializeApp({ databaseURL: cfg.databaseURL, projectId: cfg.projectId });
+    startCloud(firebase.database());
+    $('btn-out').hidden = true;
+    return;
+  }
   const configured = !!(cfg.apiKey && cfg.projectId && !/^PASTE/.test(cfg.apiKey));
   if (!configured) { startLocal('Firebase is not set up yet, so data is saved on this device only. See README.md.'); return; }
   if (!window.firebase) { startLocal('Could not load Firebase. Data is saved on this device only.'); return; }

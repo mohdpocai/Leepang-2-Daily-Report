@@ -14,7 +14,13 @@ Until Firebase is set up, the page still works and saves on the device you are u
 | `database.rules.json` | Who may read and change the data |
 | `firebase.json` | Only needed if you host on Firebase Hosting |
 
-## Set up Firebase (about 10 minutes, once)
+## Quick setup: open to everyone (free, no sign-in)
+
+`firebase-config.js` has `openAccess: true`, so the page needs no login. In Firebase **Realtime Database > Rules**, paste the contents of `database.rules.json` and press **Publish**. Anyone with the page link can then see and change the reports. Firebase's free Spark plan is enough.
+
+To require a sign-in instead, use the steps below (they use a private-rules version; set `openAccess: false`).
+
+## Set up Firebase with sign-in (about 10 minutes, once)
 
 1. Go to <https://console.firebase.google.com> and choose **Add project**. Name it, for example, `leepang2-report`. Google Analytics is not needed.
 2. **Build > Realtime Database > Create database.** Choose **Locked mode**. (Already created for this project, in Singapore.)

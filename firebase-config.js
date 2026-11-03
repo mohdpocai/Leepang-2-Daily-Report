@@ -1,7 +1,9 @@
 // Paste your Firebase web app settings here.
 // Firebase console > Project settings > General > Your apps > Web app > SDK setup and configuration.
 // These values are not secrets. The data is protected by the sign-in and the rules in firestore.rules.
+// openAccess: true = no sign-in; anyone with the link can view and edit. Set to false and fill the keys below to require sign-in.
 window.FIREBASE_CONFIG = {
+  openAccess: true,
   apiKey: "PASTE_API_KEY",
   databaseURL: "https://leepang-2-daily-report-default-rtdb.asia-southeast1.firebasedatabase.app",
   authDomain: "leepang-2-daily-report.firebaseapp.com",
