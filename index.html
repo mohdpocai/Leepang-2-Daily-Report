@@ -183,7 +183,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size
       <select id="hist" class="btn"></select>
       <button id="btn-edit" class="btn primary" type="button" aria-expanded="false" aria-controls="editor" hidden>Edit figures</button>
       <button id="btn-new" class="btn" type="button" hidden>New day</button>
-      <button id="btn-img" class="btn" type="button" hidden>Save as image</button>
+      <button id="btn-img" class="btn" type="button" hidden>Share image</button>
       <button id="btn-out" class="btn" type="button" hidden>Sign out</button>
       <span id="status" class="status" role="status" aria-live="polite"></span>
     </div>
@@ -640,8 +640,27 @@ function onList(snap) {
 let loadTimer = null;
 
 /* ---------- image export ---------- */
+let imgCache = null;
+async function shareBlob(blob) {
+  const name = 'Leepang2-' + (state.date || 'report') + '.png';
+  const file = new File([blob], name, { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'Leepang 2 Daily Report' }); setStatus('Shared'); return; }
+    catch (e) {
+      if (e && e.name === 'AbortError') { setStatus('Share cancelled'); return; }
+      if (e && e.name === 'NotAllowedError') { setStatus('Image is ready. Tap Share image again.'); return; }
+    }
+  }
+  /* this device cannot share files (for example a computer): copy the picture so it can be pasted into WhatsApp Web or an email */
+  try {
+    if (navigator.clipboard && window.ClipboardItem) { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); setStatus('Image copied. Paste it into your message.'); return; }
+  } catch (e) {}
+  setStatus('This browser cannot share images. Open the page on your phone to share.', true);
+}
 async function exportImage() {
   const btn = $('btn-img');
+  const key = sig(state);
+  if (imgCache && imgCache.key === key) { await shareBlob(imgCache.blob); return; }
   if (!window.html2canvas) { setStatus('Image export could not load.', true); return; }
   btn.disabled = true; setStatus('Preparing image…');
   try {
@@ -655,10 +674,10 @@ async function exportImage() {
       }
     });
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-    await dl.save({ filename: 'Leepang2-' + (state.date || 'report') + '.png', data: blob });
-    setStatus('Image saved');
+    imgCache = { key, blob };
+    await shareBlob(blob);
   } catch (e) {
-    setStatus(e && e.code === 'declined' ? 'Save cancelled' : 'Could not make the image.', !(e && e.code === 'declined'));
+    setStatus('Could not make the image.', true);
   } finally { btn.disabled = false; }
 }
 

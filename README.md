@@ -48,7 +48,7 @@ In the old copy, open **Edit figures > Backup > Download backup**. In this copy,
 
 1. Tap **New day**. The Todate figures carry forward from the previous saved day.
 2. In **Update daily**, type Today Crop, the gang figures and Rainfall today.
-3. Tap **Save as image** to share the report, for example on WhatsApp.
+3. Tap **Share image** to send the report, for example on WhatsApp.
 
 ## Budget table
 
