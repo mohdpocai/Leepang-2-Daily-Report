@@ -507,7 +507,7 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
 /* ---------- editor ---------- */
 function field(path, label, hint, ph, cls) {
   const id = 'f-' + path.replace(/\./g, '-');
-  return '<label class="fld' + (cls ? ' ' + cls : '') + '" for="' + id + '"><span>' + label + (cls === 'auto' ? ' <i class="tag">auto</i>' : '') + '</span><div class="inp"><input id="' + id + '" data-path="' + path + '" inputmode="decimal" autocomplete="off" spellcheck="false"' + (ph ? ' placeholder="' + ph + '"' : '') + '><em>' + hint + '</em></div></label>';
+  return '<label class="fld' + (cls ? ' ' + cls : '') + '" for="' + id + '"><span>' + label + (cls === 'auto' ? ' <i class="tag">auto</i>' : '') + '</span><div class="inp"><input id="' + id + '" data-path="' + path + '" inputmode="' + (/\.(outturn|backlog)$/.test(path) ? 'text' : 'decimal') + '" autocomplete="off" spellcheck="false"' + (ph ? ' placeholder="' + ph + '"' : '') + '><em>' + hint + '</em></div></label>';
 }
 function buildForm() {
   const fold = (cls, title, sub, body) => '<details class="pnl fold ' + cls + '"><summary class="pnl-h"><h3>' + title + '</h3><p>' + sub + '</p></summary>' + body + '</details>';
