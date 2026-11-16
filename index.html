@@ -110,6 +110,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size
 .fold[open]>summary::after{transform:rotate(-135deg);top:12px}
 .fold>summary:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:6px}
 .fold[open]>summary{margin-bottom:14px}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
 .tag{font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-left:4px;white-space:nowrap}
 .ro{display:grid;gap:4px;min-width:0}
 .ro>span{font-size:13px;font-weight:600}
@@ -537,7 +538,8 @@ function buildForm() {
     fold('auto', 'Filled in automatically', 'Open to check or correct the carried-forward figures.', auto) +
     fold('setup', 'Set when it changes', 'Hectarage, once at the start of each month.', setup) +
     fold('data', 'Backup', 'Download or import saved reports.',
-      '<div class="row"><button id="btn-export" class="btn" type="button">Download backup</button><button id="btn-import" class="btn" type="button">Import backup</button><input type="file" id="f-import" accept="application/json,.json" hidden></div><p class="note">Importing replaces saved reports that have the same date.</p>');
+      '<div class="row"><button id="btn-export" class="btn" type="button">Download backup</button><button id="btn-import" class="btn" type="button">Import backup</button><input type="file" id="f-import" accept="application/json,.json" hidden></div><p class="note">Importing replaces saved reports that have the same date.</p>' +
+      '<div class="row" style="margin-top:14px"><button id="btn-reset" class="btn danger" type="button">Reset all data</button></div><p class="note">Deletes every saved report, on every device. Download a backup first.</p>');
 }
 function syncForm() {
   $('editor').querySelectorAll('[data-path]').forEach(el => {
@@ -754,6 +756,22 @@ $('btn-export').addEventListener('click', async () => {
   const blob = new Blob([JSON.stringify({ app: 'leepang2-daily-report', exportedAt: new Date().toISOString(), reports: out }, null, 2)], { type: 'application/json' });
   try { await dl.save({ filename: 'leepang2-reports-backup-' + new Date().toISOString().slice(0, 10) + '.json', data: blob }); setStatus('Backup saved'); }
   catch (e) { if (!(e && e.code === 'declined')) setStatus('Could not save the backup.', true); }
+});
+$('btn-reset').addEventListener('click', async () => {
+  if (!confirm('Reset ALL data?\n\nThis deletes every saved report' + (db ? ' for everyone using this page' : ' on this device') + '. It cannot be undone.\n\nTip: tap Cancel and use Download backup first.')) return;
+  const word = prompt('To confirm, type RESET');
+  if (!word || word.trim().toUpperCase() !== 'RESET') { setStatus('Reset cancelled.'); return; }
+  setStatus('Resetting…');
+  try {
+    clearTimeout(timer); dirty = false; rev++;
+    if (db) await db.ref('reports').remove();
+    else localStorage.removeItem(LS);
+    reports = new Map(); picked = true;
+    const t = new Date();
+    state = clone(DEFAULT); state.date = t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate());
+    render(); syncForm(); updateHist();
+    setStatus('All data has been reset.');
+  } catch (err) { setStatus('Could not reset. ' + (/permission/i.test((err && (err.code || err.message)) || '') ? 'This account is not allowed to delete the reports.' : 'Check your connection and try again.'), true); }
 });
 $('btn-import').addEventListener('click', () => $('f-import').click());
 $('f-import').addEventListener('change', async e => {
