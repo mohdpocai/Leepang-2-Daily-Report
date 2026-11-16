@@ -412,7 +412,7 @@ function autoTodate(d, initial) {
   if (ry !== null) d.rain.ytd = (ry + rt).toFixed(1);
 }
 function applyLF(d) {
-  /* LF Todate (month): running average of LF Today, weighted by each day's crop (yield x outturn) */
+  /* LF Todate (month): running average of LF Today (every day counts the same) */
   if (!d || !d.date) return;
   d.gangs = d.gangs || {};
   const prev = prevReport(d.date), same = prev && prev.date && prev.date.slice(0, 7) === d.date.slice(0, 7);
@@ -420,8 +420,7 @@ function applyLF(d) {
     const g = d.gangs[k] = d.gangs[k] || {}, pg = same ? ((prev.gangs || {})[k] || {}) : {};
     const pt = num(pg.looseTd), pw = num(pg.lfW) > 0 ? num(pg.lfW) : (pt !== null ? 1 : 0);
     const lf = num(g.loose), o = (String(g.outturn == null ? '' : g.outturn).match(/^\d+(?:\.\d+)?/) || [null])[0], y = num(g.yield);
-    let w = o !== null ? (y !== null ? y * parseFloat(o) : parseFloat(o)) : 1;
-    if (!(w > 0)) w = 1;
+    const w = 1; /* every day counts the same */
     const man = g.lfMan === '1' && num(g.looseTd) !== null;
     if (lf === null) { if (!man) g.looseTd = pt !== null ? String(pg.looseTd) : ''; g.lfW = pt !== null || man ? String(pw || 1) : ''; return; }
     const W = (pt !== null ? pw : 0) + w;
@@ -446,7 +445,7 @@ function applyAll(d) {
   const w = gs.map(g => { const y = num(g.yield), o = ot.length ? (String(g.outturn).match(/^\d+(?:\.\d+)?/) || [null])[0] : null; return y !== null && o !== null ? y * parseFloat(o) : o !== null ? parseFloat(o) : 1; });
   const wavg = (key, dec) => {
     let sw = 0, sv = 0;
-    gs.forEach((g, i) => { const v = num(g[key]); if (v !== null) { const x = w[i] > 0 ? w[i] : 1; sw += x; sv += v * x; } });
+    gs.forEach((g, i) => { const v = num(g[key]); if (v !== null) { const x = key === 'loose' ? 1 : (w[i] > 0 ? w[i] : 1); sw += x; sv += v * x; } });
     return sw > 0 ? (sv / sw).toFixed(dec) : '';
   };
   /* Yield/mdy = total crop / total man-days */
@@ -459,7 +458,7 @@ function applyAll(d) {
   a.interval = iv.length ? String(Math.max.apply(null, iv)) : '';
   a.loose = wavg('loose', 1);
   let tw = 0, tv = 0;
-  gs.forEach(g => { const v = num(g.looseTd), x = num(g.lfW) > 0 ? num(g.lfW) : 1; if (v !== null) { tw += x; tv += v * x; } });
+  gs.forEach(g => { const v = num(g.looseTd); if (v !== null) { tw += 1; tv += v; } });
   a.looseTd = tw > 0 ? (tv / tw).toFixed(1) : '';
   const bl = gs.map(g => String(g.backlog == null ? '' : g.backlog).trim()).filter(v => v && !/^nil$/i.test(v));
   a.backlog = bl.length ? (bl.every(v => num(v) !== null) ? String(bl.reduce((t, v) => t + num(v), 0)) : bl.join(', ')) : (gs.some(g => /^nil$/i.test(String(g.backlog).trim())) ? 'Nil' : '');
@@ -529,7 +528,7 @@ function buildForm() {
   });
   const allG = GANGS.find(g => g.k === 'all');
   daily += '<div class="gc2 sum" style="--dot:' + allG.c + '"><h4>' + allG.name + ' <i class="tag">automatic</i></h4><div class="gg">' +
-    ROWS.map(r => ro('ro-all-' + r.k, lab(r), false)).join('') + '</div><p class="note">Added up from the four gangs above. Outturn is added, Unripe is added, Interval takes the highest, the other figures are averaged by crop. LF Todate for each gang is worked out automatically from the days before.</p></div>';
+    ROWS.map(r => ro('ro-all-' + r.k, lab(r), false)).join('') + '</div><p class="note">Added up from the four gangs above. Outturn is added, Unripe is added, Interval takes the highest, LF is the average of the gangs, the other figures are averaged by crop. LF Todate for each gang is worked out automatically from the days before.</p></div>';
   daily += '<div class="gg two">' + sm('crop.est', 'Estimate Crop Today (mt)') + '</div>';
   daily += '<label class="fld" for="f-remarks" style="margin-top:14px"><span>Remarks</span><textarea id="f-remarks" data-path="remarks" rows="2"></textarea></label>';
 
