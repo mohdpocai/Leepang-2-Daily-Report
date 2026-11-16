@@ -217,7 +217,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size
 /* ---------- data ---------- */
 const DEFAULT = {
   date: '2026-11-02',
-  crop: { ha: '', tdy: '', est: '', mth: '', yFyBase: '', bYMth: '', bYFy: '' },
+  crop: { ha: '', tdy: '', lfMt: '', lfMtd: '', est: '', mth: '', yFyBase: '', bYMth: '', bYFy: '' },
   gangs: {
     pm20:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '', looseTd: '' },
     pm16:  { outturn: '', yield: '', unripe: '', interval: '', backlog: '', loose: '', looseTd: '' },
@@ -416,6 +416,9 @@ function applyLF(d) {
   if (!d || !d.date) return;
   d.gangs = d.gangs || {};
   const prev = prevReport(d.date), same = prev && prev.date && prev.date.slice(0, 7) === d.date.slice(0, 7);
+  d.crop = d.crop || {};
+  { const pm = same ? num((prev.crop || {}).lfMtd) : null, tm = num(d.crop.lfMt);
+    d.crop.lfMtd = pm === null && tm === null ? '' : ((pm || 0) + (tm || 0)).toFixed(2); }
   SUMMARY_GANGS.forEach(k => {
     const g = d.gangs[k] = d.gangs[k] || {}, pg = same ? ((prev.gangs || {})[k] || {}) : {};
     const pt = num(pg.looseTd), pw = num(pg.lfW) > 0 ? num(pg.lfW) : (pt !== null ? 1 : 0);
@@ -460,6 +463,7 @@ function applyAll(d) {
   let tw = 0, tv = 0;
   gs.forEach(g => { const v = num(g.looseTd); if (v !== null) { tw += 1; tv += v; } });
   a.looseTd = tw > 0 ? (tv / tw).toFixed(1) : '';
+
   const bl = gs.map(g => String(g.backlog == null ? '' : g.backlog).trim()).filter(v => v && !/^nil$/i.test(v));
   a.backlog = bl.length ? (bl.every(v => num(v) !== null) ? String(bl.reduce((t, v) => t + num(v), 0)) : bl.join(', ')) : (gs.some(g => /^nil$/i.test(String(g.backlog).trim())) ? 'Nil' : '');
 }
@@ -467,10 +471,18 @@ function syncLF() {
   /* show the automatic LF Todate in its box unless the person is typing in it */
   SUMMARY_GANGS.forEach(k => { const el = $('f-gangs-' + k + '-looseTd'); if (el && document.activeElement !== el) el.value = (state.gangs[k] || {}).looseTd || ''; });
 }
+function applyMillLF(d) {
+  /* mill method: LF (MT) / crop (MT) x 100, todate uses the month's totals */
+  const c = d.crop || {}, lf = num(c.lfMt), cr = num(c.tdy), lfd = num(c.lfMtd), crd = num(c.mth);
+  d.gangs = d.gangs || {}; const a = d.gangs.all = d.gangs.all || {};
+  if (lf !== null && cr > 0) a.loose = (lf / cr * 100).toFixed(2);
+  if (lfd !== null && crd > 0) a.looseTd = (lfd / crd * 100).toFixed(2);
+}
 function render() {
   applyYieldBudget(state);
   applyLF(state);
   applyAll(state);
+  applyMillLF(state);
   ensureFyBase(state);
   const d = state, c = d.crop || {}, r = d.rain || {}, g = d.gangs || {};
   $('report').innerHTML =
@@ -490,6 +502,7 @@ function render() {
   put('ro-budget-fy', withUnit(c.bYFy, ' mt/Ha'));
   ROWS.forEach(x => put('ro-all-' + x.k, ((state.gangs && state.gangs.all && state.gangs.all[x.k]) || '') === '' ? '\u2014' : withUnit(state.gangs.all[x.k], x.unit)));
   syncLF();
+  put('ro-lfmtd', withUnit(state.crop && state.crop.lfMtd, ' mt') || '\u2014');
   put('calc', num(c.ha) > 0 ? (num(c.yFyBase) === null ? 'Enter Todate Yield (FY) up to last month once, to see the FY yield.' : '') : 'Enter the Hectarage (in Set when it changes) to calculate the yields.');
   fit();
 }
@@ -521,20 +534,20 @@ function buildForm() {
   const lab = r => r.elabel || (r.hint && r.k !== 'yield' ? r.label + ' (' + r.hint + ')' : r.label);
   const sm = (path, label, ph) => field(path, label, '', ph, 'sm');
 
-  let daily = '<div class="gg two">' + sm('crop.tdy', 'Today Crop (mt)') + sm('rain.tdy', 'Rainfall today (mm)') + '</div>';
+  let daily = '<div class="gg">' + sm('crop.tdy', 'Today Crop (mt)') + sm('crop.lfMt', 'LF consignment (mt)') + sm('rain.tdy', 'Rainfall today (mm)') + '</div>';
   GANGS.filter(g => g.k !== 'all').forEach(g => {
     daily += '<div class="gc2" style="--dot:' + g.c + '"><h4>' + g.name + '</h4><div class="gg">' +
       ROWS.map(r => r.k === 'looseTd' ? field('gangs.' + g.k + '.looseTd', r.elabel, '', '', 'sm auto') : sm('gangs.' + g.k + '.' + r.k, lab(r), r.ph)).join('') + '</div></div>';
   });
   const allG = GANGS.find(g => g.k === 'all');
   daily += '<div class="gc2 sum" style="--dot:' + allG.c + '"><h4>' + allG.name + ' <i class="tag">automatic</i></h4><div class="gg">' +
-    ROWS.map(r => ro('ro-all-' + r.k, lab(r), false)).join('') + '</div><p class="note">Added up from the four gangs above. Outturn is added, Unripe is added, Interval takes the highest, LF is the average of the gangs, the other figures are averaged by crop. LF Todate for each gang is worked out automatically from the days before.</p></div>';
+    ROWS.map(r => ro('ro-all-' + r.k, lab(r), false)).join('') + '</div><p class="note">Added up from the four gangs above. Outturn is added, Unripe is added, Interval takes the highest, LF is LF consignment (mt) \u00f7 Today Crop (mt) like the mill report (the average of the gangs until you type it), the other figures are averaged by crop. LF Todate for each gang is worked out automatically from the days before.</p></div>';
   daily += '<div class="gg two">' + sm('crop.est', 'Estimate Crop Today (mt)') + '</div>';
   daily += '<label class="fld" for="f-remarks" style="margin-top:14px"><span>Remarks</span><textarea id="f-remarks" data-path="remarks" rows="2"></textarea></label>';
 
   const auto = '<div class="grid">' + field('crop.mth', 'Todate Crop (Mth)', 'mt', '', 'auto') + field('crop.yFyBase', 'Todate Yield (FY) up to last month', 'mt/Ha', '', 'auto') +
     field('rain.mtd', 'Rainfall MTD', 'mm', '', 'auto') + field('rain.ytd', 'Rainfall YTD', 'mm', '', 'auto') +
-    ro('ro-tdy', 'Today Yield') + ro('ro-mth', 'Todate Yield (Mth)') + ro('ro-fy', 'Todate Yield (FY)') + '</div><p class="note" id="calc"></p>';
+    ro('ro-lfmtd', 'LF Todate (mt)') + ro('ro-tdy', 'Today Yield') + ro('ro-mth', 'Todate Yield (Mth)') + ro('ro-fy', 'Todate Yield (FY)') + '</div><p class="note" id="calc"></p>';
 
   const setup = '<div class="grid">' + field('crop.ha', 'Hectarage for the month', 'Ha') + ro('ro-budget-mth', 'Todate Yield Budget (Mth)') + ro('ro-budget-fy', 'Todate Yield Budget (FY)') + '</div><p class="note">The Hectarage applies to the whole month. If you change it, the yield changes for every saved day of that month. Earlier months stay as they are.</p><p class="note">Yield budgets are calculated automatically from the 2026/2027 monthly budget (July 2026 to June 2027).</p>';
 
