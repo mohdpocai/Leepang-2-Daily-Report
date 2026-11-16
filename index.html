@@ -454,7 +454,8 @@ function applyAll(d) {
   gs.forEach(g => { const y = num(g.yield), m = (String(g.outturn).match(/^\d+(?:\.\d+)?/) || [null])[0]; if (y !== null && m !== null) { ym += y * parseFloat(m); mo += parseFloat(m); } });
   a.yield = mo > 0 ? (ym / mo).toFixed(2) : wavg('yield', 2);
   a.unripe = wavg('unripe', 1);
-  a.interval = wavg('interval', 1);
+  const iv = gs.map(g => num(g.interval)).filter(v => v !== null);
+  a.interval = iv.length ? String(Math.max.apply(null, iv)) : '';
   a.loose = wavg('loose', 1);
   let tw = 0, tv = 0;
   gs.forEach(g => { const v = num(g.looseTd), x = num(g.lfW) > 0 ? num(g.lfW) : 1; if (v !== null) { tw += x; tv += v * x; } });
@@ -527,7 +528,7 @@ function buildForm() {
   });
   const allG = GANGS.find(g => g.k === 'all');
   daily += '<div class="gc2 sum" style="--dot:' + allG.c + '"><h4>' + allG.name + ' <i class="tag">automatic</i></h4><div class="gg">' +
-    ROWS.map(r => ro('ro-all-' + r.k, lab(r), false)).join('') + '</div><p class="note">Added up from the four gangs above. Outturn is added, the other figures are averaged by crop. LF Todate for each gang is worked out automatically from the days before.</p></div>';
+    ROWS.map(r => ro('ro-all-' + r.k, lab(r), false)).join('') + '</div><p class="note">Added up from the four gangs above. Outturn is added, Interval takes the highest, the other figures are averaged by crop. LF Todate for each gang is worked out automatically from the days before.</p></div>';
   daily += '<div class="gg two">' + sm('crop.est', 'Estimate Crop Today (mt)') + '</div>';
   daily += '<label class="fld" for="f-remarks" style="margin-top:14px"><span>Remarks</span><textarea id="f-remarks" data-path="remarks" rows="2"></textarea></label>';
 
